@@ -123,36 +123,45 @@ public class ZooKeeperServerMain {
         FileTxnSnapLog txnLog = null;
         try {
             try {
+                //启动观察相关的信息
                 metricsProvider = MetricsProviderBootstrap.startMetricsProvider(
                     config.getMetricsProviderClassName(),
                     config.getMetricsProviderConfiguration());
             } catch (MetricsProviderLifeCycleException error) {
                 throw new IOException("Cannot boot MetricsProvider " + config.getMetricsProviderClassName(), error);
             }
+            //启动服务的观察类（JMX？）
             ServerMetrics.metricsProviderInitialized(metricsProvider);
             // Note that this thread isn't going to be doing anything else,
             // so rather than spawning another thread, we will just call
             // run() in this thread.
             // create a file logger url from the command line args
+            //初始化日志和快照的记录地址
             txnLog = new FileTxnSnapLog(config.dataLogDir, config.dataDir);
+            //默认不开启，暂时不管
             JvmPauseMonitor jvmPauseMonitor = null;
             if (config.jvmPauseMonitorToRun) {
                 jvmPauseMonitor = new JvmPauseMonitor(config);
             }
+            //初始化zkServer
             final ZooKeeperServer zkServer = new ZooKeeperServer(jvmPauseMonitor, txnLog, config.tickTime, config.minSessionTimeout, config.maxSessionTimeout, config.listenBacklog, null, config.initialConfig);
+            //记录信息
             txnLog.setServerStats(zkServer.serverStats());
 
             // Registers shutdown handler which will be used to know the
             // server error or shutdown state changes.
+            //设置服务器停止操作，当异常或状态变更时会停止
             final CountDownLatch shutdownLatch = new CountDownLatch(1);
             zkServer.registerServerShutdownHandler(new ZooKeeperServerShutdownHandler(shutdownLatch));
 
-            // Start Admin server
+            //todo 不清楚adminServer什么作用
+            //初始化并启动adminServer，默认不开启
             adminServer = AdminServerFactory.createAdminServer();
             adminServer.setZooKeeperServer(zkServer);
             adminServer.start();
 
             boolean needStartZKServer = true;
+            //正式启动服务
             if (config.getClientPortAddress() != null) {
                 cnxnFactory = ServerCnxnFactory.createFactory();
                 cnxnFactory.configure(config.getClientPortAddress(), config.getMaxClientCnxns(), config.getClientPortListenBacklog(), false);
